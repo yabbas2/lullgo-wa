@@ -1,31 +1,33 @@
-import { FaVideo } from 'react-icons/fa';
+import { FaVideo, FaBell } from 'react-icons/fa';
 import { useNavigate } from "react-router";
+import { useState } from 'react';
 import './main.css'
 
 export default function App() {
     let navigate = useNavigate();
+    const [granted, setGranted] = useState(Notification.permission === 'granted');
 
     async function enableNotification() {
         const permission = await Notification.requestPermission();
+        setGranted(permission === 'granted');
         if (permission !== 'granted') {
             console.log('Permission not granted for Notification');
             return;
         }
+
         const registration = await navigator.serviceWorker.ready;
         try {
             const subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
-                applicationServerKey: process.env.VAPID_PUBLIC_KEY,
+                applicationServerKey: urlBase64ToUint8Array(process.env.VAPID_PUBLIC_KEY!),
             });
 
-            // Send the subscription to your server
-            // const response = await fetch('/api/subscribe', {
-            //   method: 'POST',
-            //   headers: {
-            //     'Content-Type': 'application/json',
-            //   },
-            //   body: JSON.stringify(subscription),
-            // });
+            // Send subscription to your backend
+            await fetch('http://localhost:5000/api/save-subscription', {
+                method: 'POST',
+                body: JSON.stringify(subscription),
+                headers: { 'Content-Type': 'application/json' },
+            });
 
             console.log('User is subscribed:', subscription);
         } catch (err) {
@@ -38,20 +40,28 @@ export default function App() {
         });
     }
 
+    // Helper function
+    const urlBase64ToUint8Array = (base64String: string) => {
+        const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = atob(base64);
+        return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
+    };
+
     return (
-        <div className="w-screen h-screen bg-black items-center justify-center flex flex-col">
+        <div className="w-screen h-screen bg-black items-center justify-center flex flex-row">
             <button
                 onClick={() => { navigate("/video") }}
-                className="text-white-500 transition-colors my-5"
+                className="text-white-500 transition-colors mx-5"
             >
                 <FaVideo size={35} />
             </button>
             <button
                 onClick={() => { enableNotification() }}
-                className="text-white-500 transition-colors my-5 disabled:opacity-50"
-                disabled={Notification.permission === 'granted'}
+                className="text-white-500 transition-colors mx-5 disabled:opacity-50"
+                disabled={granted}
             >
-                Enable Notification
+                <FaBell size={35} />
             </button>
         </div>
     );
