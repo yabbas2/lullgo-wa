@@ -23,7 +23,7 @@ export default function App() {
             });
 
             // Send subscription to your backend
-            await fetch('http://localhost:5000/api/save-subscription', {
+            await fetch('https://rpi.local:5000/api/save-subscription', {
                 method: 'POST',
                 body: JSON.stringify(subscription),
                 headers: { 'Content-Type': 'application/json' },
