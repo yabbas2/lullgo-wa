@@ -1,4 +1,4 @@
-import { FaVideo, FaBell } from 'react-icons/fa';
+import { FaPhotoVideo, FaBell } from 'react-icons/fa';
 import { useNavigate } from "react-router";
 import { useState } from 'react';
 import './main.css'
@@ -54,7 +54,7 @@ export default function App() {
                 onClick={() => { navigate("/video") }}
                 className="text-white-500 transition-colors mx-5"
             >
-                <FaVideo size={35} />
+                <FaPhotoVideo size={35} />
             </button>
             <button
                 onClick={() => { enableNotification() }}

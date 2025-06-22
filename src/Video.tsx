@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef } from 'react';
-import { FaPlay, FaPause, FaStop, FaCircle } from 'react-icons/fa';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { FaPlay, FaPause, FaStop, FaVideo, FaVideoSlash, FaVolumeMute, FaVolumeUp } from 'react-icons/fa';
 import './main.css'
 
 type StreamConnectType = 'notConnected' | 'connecting' | 'connected';
@@ -10,11 +10,29 @@ export default function Video() {
     const [streamConnect, setStreamConnect] = useState<StreamConnectType>('notConnected');
     const [pc, setPc] = useState<RTCPeerConnection | null>(null);
     const [isPaused, setIsPaused] = useState(false);
-    const [controlsVisible, setControlsVisible] = useState(true);
+    const [controlsVisible, setControlsVisible] = useState(false);
+    const [controlsOpacity, setControlsOpacity] = useState(0);
+    const [isRecording, setIsRecording] = useState(false);
+    const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
+    const [recordingTime, setRecordingTime] = useState(0);
+    const [recordingDotVisible, setRecordingDotVisible] = useState(true);
+    const [muted, setMuted] = useState(true);
+
     const videoRef = useRef<HTMLVideoElement>(null);
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const [controlsOpacity, setControlsOpacity] = useState(0);
     const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const dotIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    const iconSize = 30;
+
+    // Format recording time to HH:MM:SS
+    const formatTime = useCallback((seconds: number) => {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        return [h, m, s].map(val => val.toString().padStart(2, '0')).join(':');
+    }, []);
 
     // Handle controls visibility with animation
     const toggleControls = (visible: boolean, immediate = false) => {
@@ -63,8 +81,10 @@ export default function Video() {
             // Handle track events
             pc.ontrack = (event) => {
                 console.debug('ontrack', event);
-                setStream(event.streams[0]);
-                setStreamConnect('connected');
+                if (event.streams && event.streams[0]) {
+                    setStream(event.streams[0]);
+                    setStreamConnect('connected');
+                }
             };
 
             pc.addTransceiver('video', { direction: 'recvonly' });
@@ -109,12 +129,29 @@ export default function Video() {
         }
     };
 
-    const recordStream = () => {
+    const startRecordStream = () => {
         if (!stream) return;
+        if (isRecording) return;
+
+        setIsRecording(true);
+        setRecordingTime(0);
+
+        // Start recording timer
+        recordingIntervalRef.current = setInterval(() => {
+            setRecordingTime(prev => prev + 1);
+        }, 1000);
+
+        // Start blinking animation for red dot
+        dotIntervalRef.current = setInterval(() => {
+            setRecordingDotVisible(prev => !prev);
+        }, 1000);
+
+        resetAutoHideTimer();
 
         const mediaRecorder = new MediaRecorder(stream);
-        const chunks: Blob[] = [];
+        setRecorder(mediaRecorder)
 
+        const chunks: Blob[] = [];
         mediaRecorder.ondataavailable = (e) => {
             chunks.push(e.data);
         };
@@ -133,13 +170,40 @@ export default function Video() {
         };
 
         mediaRecorder.start();
+    };
 
-        // Stop after 10 seconds for demo
-        setTimeout(() => {
-            if (mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-            }
-        }, 10000);
+    const stopRecordStream = () => {
+        if (!isRecording) return;
+
+        setIsRecording(false);
+
+        // Clear intervals
+        if (recordingIntervalRef.current) {
+            clearInterval(recordingIntervalRef.current);
+            recordingIntervalRef.current = null;
+        }
+
+        if (dotIntervalRef.current) {
+            clearInterval(dotIntervalRef.current);
+            dotIntervalRef.current = null;
+        }
+
+        // Reset dot visibility
+        setRecordingDotVisible(true);
+
+        resetAutoHideTimer();
+
+        if (recorder!.state !== 'inactive') {
+            recorder!.stop();
+        }
+    };
+
+    const toggleRecordStream = () => {
+        if (isRecording) {
+            stopRecordStream();
+        } else {
+            startRecordStream();
+        }
     };
 
     const stopStream = () => {
@@ -166,6 +230,8 @@ export default function Video() {
             if (pc) pc.close();
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
             if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+            if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current);
+            if (dotIntervalRef.current) clearInterval(dotIntervalRef.current);
         };
     }, [pc]);
 
@@ -179,25 +245,39 @@ export default function Video() {
                     ref={videoRef}
                     autoPlay
                     playsInline
+                    muted={muted}
                     className="w-full h-full object-cover"
                 />
             ) : (
                 <div className="w-full h-full" />
             )}
 
+            {/* Recording Indicator */}
+            {isRecording && (
+                <div className="absolute top-4 left-4 flex items-center gap-2 bg-black/50 px-3 py-2 rounded-full">
+                    <div
+                        className={`w-3 h-3 rounded-full bg-red-500 transition-opacity duration-300 ${recordingDotVisible ? 'opacity-100' : 'opacity-0'
+                            }`}
+                    />
+                    <span className="text-white font-mono text-sm">
+                        {formatTime(recordingTime)}
+                    </span>
+                </div>
+            )}
+
             {streamConnect === 'notConnected' && (
-                <div className="absolute inset-x-0 bottom-5 p-4 h-24 bg-transparent flex gap-10 justify-center items-center">
+                <div className="absolute inset-x-0 bottom-20 p-4 h-24 bg-transparent flex gap-10 justify-center items-center">
                     <button
                         onClick={startStream}
                         className="text-white hover:opacity-80 transition-opacity"
                     >
-                        <FaPlay size={35} />
+                        <FaPlay size={iconSize} />
                     </button>
                 </div>
             )}
 
             {streamConnect === 'connecting' && (
-                <div className="absolute inset-x-0 bottom-5 p-4 h-24 flex gap-10 justify-center items-center">
+                <div className="absolute inset-x-0 bottom-20 p-4 h-24 flex gap-10 justify-center items-center">
                     <div className="text-white">
                         <span className="animate-spin rounded-full h-10 w-10 border-b-2 border-white block"></span>
                     </div>
@@ -206,29 +286,39 @@ export default function Video() {
 
             {streamConnect === 'connected' && controlsVisible && (
                 <div
-                    className="absolute inset-x-0 bottom-5 p-4 h-24 bg-transparent flex gap-10 justify-center items-center"
+                    className="absolute inset-x-0 bottom-20 p-4 h-24 bg-transparent flex gap-5 justify-center items-center"
                     style={{
                         opacity: controlsOpacity,
                         transition: 'opacity 300ms ease-in-out'
                     }}
                 >
                     <button
-                        onClick={recordStream}
-                        className="text-red-500 hover:opacity-80 transition-opacity"
+                        onClick={toggleRecordStream}
+                        className="flex flex-col items-center justify-center text-red-500 hover:opacity-80 transition-opacity"
                     >
-                        <FaCircle size={35} />
+                        {isRecording ? (
+                            <FaVideoSlash size={iconSize} className="animate-pulse" />
+                        ) : (
+                            <FaVideo size={iconSize} />
+                        )}
                     </button>
                     <button
                         onClick={togglePauseStream}
                         className="text-white hover:opacity-80 transition-opacity"
                     >
-                        {isPaused ? <FaPlay size={35} /> : <FaPause size={35} />}
+                        {isPaused ? <FaPlay size={iconSize} /> : <FaPause size={iconSize} />}
                     </button>
                     <button
                         onClick={stopStream}
                         className="text-white hover:opacity-80 transition-opacity"
                     >
-                        <FaStop size={35} />
+                        <FaStop size={iconSize} />
+                    </button>
+                    <button
+                        onClick={() => setMuted(!muted)}
+                        className="text-white hover:opacity-80 transition-opacity"
+                    >
+                        {muted ? (<FaVolumeMute size={iconSize} />) : (<FaVolumeUp size={iconSize} />)}
                     </button>
                 </div>
             )}
