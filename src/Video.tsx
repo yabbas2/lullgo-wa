@@ -4,7 +4,6 @@ import './main.css'
 
 type StreamConnectType = 'notConnected' | 'connecting' | 'connected';
 
-
 export default function Video() {
     const [stream, setStream] = useState<MediaStream | null>(null);
     const [streamConnect, setStreamConnect] = useState<StreamConnectType>('notConnected');
@@ -13,7 +12,6 @@ export default function Video() {
     const [controlsVisible, setControlsVisible] = useState(false);
     const [controlsOpacity, setControlsOpacity] = useState(0);
     const [isRecording, setIsRecording] = useState(false);
-    const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
     const [recordingTime, setRecordingTime] = useState(0);
     const [recordingDotVisible, setRecordingDotVisible] = useState(true);
     const [muted, setMuted] = useState(true);
@@ -23,6 +21,8 @@ export default function Video() {
     const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const dotIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const recorderRef = useRef<MediaRecorder | null>(null);
+    const recordedChunksRef = useRef<Blob[]>([]);
 
     const iconSize = 30;
 
@@ -130,71 +130,78 @@ export default function Video() {
     };
 
     const startRecordStream = () => {
-        if (!stream) return;
-        if (isRecording) return;
+        if (!stream || isRecording) return;
 
-        setIsRecording(true);
-        setRecordingTime(0);
+        // iOS-compatible recording format
+        const options = { mimeType: 'video/mp4' };
 
-        // Start recording timer
-        recordingIntervalRef.current = setInterval(() => {
-            setRecordingTime(prev => prev + 1);
-        }, 1000);
+        try {
+            recordedChunksRef.current = [];
+            const recorder = new MediaRecorder(stream, options);
+            recorderRef.current = recorder;
 
-        // Start blinking animation for red dot
-        dotIntervalRef.current = setInterval(() => {
-            setRecordingDotVisible(prev => !prev);
-        }, 1000);
+            recorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    recordedChunksRef.current.push(event.data);
+                }
+            };
 
-        resetAutoHideTimer();
+            recorder.onstop = () => {
+                const blob = new Blob(recordedChunksRef.current, { type: 'video/mp4' });
+                const url = URL.createObjectURL(blob);
 
-        const mediaRecorder = new MediaRecorder(stream);
-        setRecorder(mediaRecorder)
+                // Create download link
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `stream-recording-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.mp4`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            };
 
-        const chunks: Blob[] = [];
-        mediaRecorder.ondataavailable = (e) => {
-            chunks.push(e.data);
-        };
+            recorder.start();
+            setIsRecording(true);
 
-        mediaRecorder.onstop = () => {
-            const blob = new Blob(chunks, { type: 'video/webm' });
-            const url = URL.createObjectURL(blob);
+            setRecordingTime(0);
+            // Start recording timer
+            recordingIntervalRef.current = setInterval(() => {
+                setRecordingTime(prev => prev + 1);
+            }, 1000);
 
-            // Create download link
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `stream-recording-${new Date().toISOString().slice(0, 19)}.webm`;
-            a.click();
+            // Start blinking animation for red dot
+            dotIntervalRef.current = setInterval(() => {
+                setRecordingDotVisible(prev => !prev);
+            }, 1000);
 
-            URL.revokeObjectURL(url);
-        };
-
-        mediaRecorder.start();
+            resetAutoHideTimer();
+        } catch (error) {
+            console.error('Recording error:', error);
+        }
     };
 
     const stopRecordStream = () => {
-        if (!isRecording) return;
+        if (!recorderRef.current || !isRecording) return;
 
-        setIsRecording(false);
+        try {
+            recorderRef.current.stop();
+            setIsRecording(false);
 
-        // Clear intervals
-        if (recordingIntervalRef.current) {
-            clearInterval(recordingIntervalRef.current);
-            recordingIntervalRef.current = null;
-        }
+            // Clear timers
+            if (recordingIntervalRef.current) {
+                clearInterval(recordingIntervalRef.current);
+                recordingIntervalRef.current = null;
+            }
 
-        if (dotIntervalRef.current) {
-            clearInterval(dotIntervalRef.current);
-            dotIntervalRef.current = null;
-        }
+            if (dotIntervalRef.current) {
+                clearInterval(dotIntervalRef.current);
+                dotIntervalRef.current = null;
+            }
 
-        // Reset dot visibility
-        setRecordingDotVisible(true);
-
-        resetAutoHideTimer();
-
-        if (recorder!.state !== 'inactive') {
-            recorder!.stop();
+            // Reset dot visibility
+            setRecordingDotVisible(true);
+            resetAutoHideTimer();
+        } catch (error) {
+            console.error('Error stopping recording:', error);
         }
     };
 
