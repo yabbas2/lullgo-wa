@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import basicSsl from '@vitejs/plugin-basic-ssl'
 import dotenv from 'dotenv';
+import path from "path"
 
 dotenv.config();
 
@@ -20,6 +21,7 @@ export default defineConfig({
                 name: 'Lullgo - Baby Monitor App',
                 short_name: 'Lullgo',
                 description: 'Baby Monitor App',
+                background_color: '#000000',
                 theme_color: '#000000',
                 icons: [
                     {
@@ -37,12 +39,6 @@ export default defineConfig({
                         sizes: "512x512",
                         type: "image/png"
                     },
-                    {
-                        src: "maskable-icon-512x512.png",
-                        sizes: "512x512",
-                        type: "image/png",
-                        purpose: "maskable"
-                    }
                 ]
             },
             strategies: 'generateSW',
@@ -57,5 +53,10 @@ export default defineConfig({
     ],
     define: {
         'process.env': process.env,
+    },
+    resolve: {
+        alias: {
+            "@": path.resolve(__dirname, "./src"),
+        },
     },
 })
