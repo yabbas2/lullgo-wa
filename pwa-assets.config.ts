@@ -3,6 +3,6 @@ import { defineConfig, minimal2023Preset as preset } from '@vite-pwa/assets-gene
 export default defineConfig({
     preset,
     images: [
-        'public/logo.png',
+        'src/assets/images/bw_logo.png',
     ]
 })

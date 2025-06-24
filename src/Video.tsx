@@ -338,10 +338,9 @@ export default function Video() {
             )}
 
             {isRecording && (
-                <div className="absolute top-20 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/50 rounded-full">
+                <div className="absolute top-20 left-1/2 -translate-x-1/2 flex flex-row gap-2 p-2 items-center bg-black/50 rounded-lg">
                     <div
-                        className={`w-3 h-3 rounded-full bg-red-500 transition-opacity duration-300 ${recordingDotVisible ? 'opacity-100' : 'opacity-0'
-                            }`}
+                        className={`w-3 h-3 rounded-full bg-red-500 transition-opacity duration-300 ${recordingDotVisible ? 'opacity-100' : 'opacity-0'}`}
                     />
                     <span className="text-white font-mono text-sm">
                         {formatTime(recordingTime)}
